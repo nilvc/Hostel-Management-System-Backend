@@ -1,28 +1,35 @@
 from django.db import models
 import uuid
+from realone.settings import MEDIA_ROOT
 from django.contrib.auth.models import User
 from django.db.models.deletion import CASCADE
-import staff_members.models as staff
-
+from staff_members.models import StaffProfile
 # Create your models here.
 
 class StudentProfile(models.Model):
     owner = models.OneToOneField(User , on_delete=models.CASCADE ,primary_key=True ,
                                 unique=True , editable=False)
-    first_name = models.CharField(max_length=200)
-    last_name = models.CharField(max_length=200)
+    name = models.CharField(max_length=200)
     branch = models.CharField(max_length=20)
     mobilenum = models.BigIntegerField()
     roomnumber = models.IntegerField()
-    created_by = models.ForeignKey("staff_members.StaffProfile",on_delete= models.CASCADE,default=None)
+    profile_pic = models.FileField(upload_to=MEDIA_ROOT , default= None)
+    year        = models.IntegerField(default=1)
+    created_by = models.ForeignKey(StaffProfile,on_delete= models.CASCADE,default=None)
 
 
     def deepserialize(self):
         owner = self.owner
         return {
-            "owner" : {"username":owner.username,"email":owner.email},
-            "first_name":self.first_name,
-            "branch":self.branch
+            "registration_id" : owner.username,
+            "email":owner.email,
+            "name":self.name,
+            "branch":self.branch,
+            "profile_pic":str(self.profile_pic),
+            "mobile_number" : self.mobilenum,
+            "room_number" : self.roomnumber,
+            "year" : self.year,
+            "staff" : self.created_by.first_name + " " + self.created_by.last_name
         }
 
     def __str__(self):
@@ -36,7 +43,6 @@ class Comlaint(models.Model):
     date = models.DateField(auto_now_add=True , editable=False)
     title = models.CharField(max_length=100,default=id)
     description = models.TextField()
-    status = models.CharField(max_length=1,default="0")
 
 
     def short_serialize(self):
@@ -48,24 +54,40 @@ class Comlaint(models.Model):
 
     def deep_serialize(self):
         owner = self.owner
-        replies = staff.Replie.objects.filter(replying_to__id = self.id)
-        replies = [replie.short_serializer() for replie in replies ]
+        replie = Replie.objects.filter(replying_to__id = self.id)
+        if len(replie)>0:
+            replies =[rep.serializer() for rep in replie]
+            replies = replies[0]
+        else:
+            replies = {"name" : "" , "description" : ""}
         return {
-            "owner":owner.owner.username,
-            "first_name":owner.first_name,
+            "id" : self.id,
+            "name":owner.name,
             "branch":owner.branch,
             "title":self.title,
             "description": self.description,
             "date":self.date,
-            "status":self.status,
             "replies":replies
         }
 
     def __str__(self) -> str:
-        return self.description
+        return self.title
 
 
+class Replie(models.Model):
+    id = models.UUIDField(default=uuid.uuid4,primary_key=True,unique=True,editable=False)
+    owner = models.ForeignKey(StaffProfile ,on_delete= models.CASCADE , editable=False)
+    date = models.DateField(auto_now_add=True)
+    description = models.TextField()
+    replying_to = models.ForeignKey(Comlaint , on_delete=models.CASCADE) 
 
+    def serializer(self):
+        name = self.owner.first_name +" "+ self.owner.last_name
+        description = self.description
+        return {
+            "name" : name,
+            "description" : description
+        }
     
 
 

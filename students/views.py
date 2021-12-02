@@ -1,8 +1,9 @@
 from django.http.response import HttpResponse, HttpResponseBadRequest, JsonResponse
-from .models import StudentProfile , Comlaint
+from .models import StudentProfile , Comlaint , Replie
 from staff_members.models import StaffProfile
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from django.core.files.storage import FileSystemStorage
 from django.contrib.auth.models import User
 from django.contrib.auth.hashers import make_password
 from knox.auth import TokenAuthentication
@@ -33,78 +34,159 @@ def getUser(token):
     return user
 
 
-def check_credentials(body):
-    name = body["username"]
-    email = body["email"]
-    password = body["password"]
-    if not name or not email or not password:
+def check_credentials(request):
+    try:
+        name = request.POST.get("username")
+        email = request.POST.get("email")
+        if not name or not email :
+            return False
+        return True
+    except:
         return False
-    return True
     
 
 
 @api_view(['POST'])
 def create_student(request):
-    body = json.loads(request.body)
-    if check_credentials(body):
-        user = User.objects.create(
-            username = body["username"],
-            email = body["email"],
-            password = make_password(body["password"]) 
-        )
-        user.save()
-        
-        staff_member =StaffProfile.objects.filter(owner__username = isauth(request))[0]
-        student = StudentProfile.objects.create(
-            owner = user,
-            first_name = body["first_name"],
-            last_name = body["last_name"],
-            branch = body["branch"],
-            mobilenum = body["mobile_number"],
-            roomnumber = body["room_number"],
-            created_by = staff_member,
-        )
-        student.save()
-        return HttpResponse("Student registered successfully")
-    return HttpResponseBadRequest("Invalid Data")
+    try:
+        staff = isauth(request)
+        if not staff:
+            return HttpResponseBadRequest("Not authorized")
+        if check_credentials(request):
+            user = User.objects.create(
+                username = request.POST.get("username"),
+                email = request.POST.get("email"),
+                password = make_password(request.POST.get("username")) 
+            )
+            user.save()
+            try:
+                staff_member =StaffProfile.objects.get(owner__username = staff)
+                file = request.FILES['profile_pic']
+                fs = FileSystemStorage()
+                filename = fs.save(file.name,file)
+                file = fs.url(filename)
+                student = StudentProfile.objects.create(
+                    owner = user,
+                    name = request.POST.get("name"),
+                    branch = request.POST.get("branch"),
+                    mobilenum = request.POST.get("mobile_number"),
+                    roomnumber = request.POST.get("room_number"),
+                    created_by = staff_member,
+                    profile_pic = file,
+                    year = request.POST.get("year")
+                )
+                student.save()
+                return HttpResponse("Student registered successfully")
+            except StaffProfile.DoesNotExist:
+                return HttpResponseBadRequest("no")
+            except:
+                user.delete()
+                return HttpResponseBadRequest("Invalid Data")
+        else:
+            return HttpResponseBadRequest("Invalid data")
+    except:
+        return HttpResponseBadRequest("Invalid Data")
 
 @api_view(['POST'])
 def add_complaint(request):
-    body = json.loads(request.body)
-    cowner = StudentProfile.objects.get(owner__username = isauth(request))
-    complaint = Comlaint.objects.create(
-        owner = cowner,
-        title = body["title"],
-        description = body["description"]
-    )
-    complaint.save()
-    return HttpResponse("complaint saved")
+    try:
+        body = json.loads(request.body)
+        if isauth(request):
+            owner = StudentProfile.objects.get(owner__username = isauth(request))
+            complaint = Comlaint.objects.create(
+                owner = owner,
+                title = body["title"],
+                description = body["description"]
+            )
+            complaint.save()
+            return HttpResponse("complaint saved")
+        else:
+            return HttpResponseBadRequest("Not authorized")
+    except StudentProfile.DoesNotExist:
+        return HttpResponseBadRequest("No student with given data")
+    except:
+        return HttpResponseBadRequest("Invalid Data")
 
 
 @api_view(['GET'])
 def get_all_complaint(request):
-    complaints = Comlaint.objects.all()
-    serializered = [complaint.short_serialize() for complaint in complaints]
-    return JsonResponse({"complaints":serializered})
+    try:
+        if isauth(request):
+            complaints = Comlaint.objects.all()
+            serializered = [complaint.deep_serialize() for complaint in complaints]
+            return JsonResponse({"complaints":serializered})
+        else:
+            return HttpResponseBadRequest("Not authorized")
+    except:
+        return HttpResponseBadRequest("Some error occured")
+
+@api_view(['GET'])
+def get_my_complaints(request):
+    try:
+        user  = isauth(request)
+        if user:
+            complaints = Comlaint.objects.filter(owner__owner__username = user)
+            serializered = [complaint.deep_serialize() for complaint in complaints]
+            return JsonResponse({"complaints":serializered})
+        else:
+            return HttpResponseBadRequest("Not authorized")
+    except:
+        return HttpResponseBadRequest("Some error occured") 
 
 
 @api_view(['GET'])
 def get_complaint(request):
-    body = json.loads(request.body)
-    id = body["id"]
-    complaint = Comlaint.objects.get(pk=id)
-    return JsonResponse({'complaint':complaint.deep_serialize()},status=200,safe=False)
+    try:
+        body = json.loads(request.body)
+        id = body["id"]
+        complaint = Comlaint.objects.get(pk=id)
+        return JsonResponse({'complaint':complaint.deep_serialize()},status=200,safe=False)
+    except Comlaint.DoesNotExist:
+        return HttpResponseBadRequest("Invalid complaint id")
+    except :
+        return HttpResponseBadRequest("Invalid Data")
     
 
 
 
 @api_view(['GET'])
 def delete_complaint(request):
-    body = json.loads(request.body)
-    id = body["id"]
-    complaint = Comlaint.objects.get(pk=id)
-    complaint.delete()
-    return HttpResponse("Complaint deleted")
+    try:
+        body = json.loads(request.body)
+        id = body["id"]
+        complaint = Comlaint.objects.get(pk=id)
+        complaint.delete()
+        return HttpResponse("Complaint deleted")
+    except Comlaint.DoesNotExist:
+        return HttpResponseBadRequest("Invalid complaint id")
+    except :
+        return HttpResponseBadRequest("Invalid Data")
+
+
+@api_view(['POST'])
+def add_reply(request):
+    try:
+        body = json.loads(request.body)
+        staff = isauth(request)
+        cowner = StaffProfile.objects.get(owner__username = staff)
+        print(cowner)
+        cdescription = body["description"]
+        complaint_owner = Comlaint.objects.get(pk=body["id"])
+        print(body["id"],complaint_owner)
+        reply = Replie.objects.create(
+            owner = cowner,
+            description = cdescription,
+            replying_to = complaint_owner
+        )
+        reply.save()
+        return HttpResponse("Reply sent")
+    except StaffProfile.DoesNotExist:
+        return HttpResponseBadRequest("No such staff ")
+    except Comlaint.DoesNotExist:
+        return HttpResponseBadRequest("No such complaint")
+    except:
+        return HttpResponseBadRequest("Some error occured")
+    
     
 
 

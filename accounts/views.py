@@ -44,9 +44,11 @@ class LoginApi(generics.GenericAPIView):
 
 def isStudent_or_Staff(username):
     try :
-        print(username)
-        student = StaffProfile.objects.get(username=username)
-        return True
+        student = StudentProfile.objects.get(owner__username = username)
+        if student:
+            return True
+        else:
+            return False
     except:
         return False
 

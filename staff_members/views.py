@@ -1,7 +1,7 @@
-from students.models import Comlaint
+from students.models import Comlaint, Replie, StudentProfile
 from django.shortcuts import render,get_list_or_404,get_object_or_404
 from django.http.response import HttpResponse, HttpResponseBadRequest, JsonResponse
-from .models import Replie, StaffProfile
+from .models import  StaffProfile
 from rest_framework.decorators import api_view
 from django.contrib.auth.models import User
 from django.contrib.auth.hashers import make_password
@@ -59,19 +59,40 @@ def Create_staff_member(request):
         return HttpResponse("Staff member created")
     return HttpResponseBadRequest("Invalid Data")
 
-@api_view(['POST'])
-def add_reply(request):
-    body = json.loads(request.body)
-    cowner = StaffProfile.objects.get(owner__username = isauth(request))
-    cdescription = body["description"]
-    complaint_owner = Comlaint.objects.get(pk=body["id"])
-    reply = Replie.objects.create(
-        owner = cowner,
-        description = cdescription,
-        replying_to = complaint_owner
-    )
-    reply.save()
-    return HttpResponse("Reply sent")
+
+
+@api_view(['GET'])
+def get_student(request,student_id):
+    try:
+        if isauth(request):
+            student = StudentProfile.objects.get(owner__username = student_id)
+            return JsonResponse({"student" : student.deepserialize()})
+        else:
+            return HttpResponseBadRequest("Not authorized")
+    except StudentProfile.DoesNotExist:
+        return HttpResponseBadRequest("No such student")
+    except:
+        return HttpResponseBadRequest("Invalid data")
+
+
+
+@api_view(['GET'])
+def delete_student(request,student_id):
+    try:
+        print("ca")
+        if isauth(request):
+            student = User.objects.get(username = student_id)
+            student.delete()
+            return HttpResponse("Student deleted successfully")
+        else:
+            return HttpResponseBadRequest("Not authorized")
+    except StudentProfile.DoesNotExist:
+        return HttpResponseBadRequest("No such student")
+    except:
+        return HttpResponseBadRequest("Invalid data")
+
+
+
 
 
 
