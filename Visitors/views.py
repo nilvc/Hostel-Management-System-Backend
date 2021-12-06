@@ -5,6 +5,9 @@ from rest_framework.decorators import api_view
 import uuid
 from knox.auth import TokenAuthentication
 import json
+from django.utils.dateparse import parse_date
+import datetime
+
 
 
 # Create your views here.
@@ -43,31 +46,47 @@ def check_credentials(body):
 
 @api_view(['POST'])
 def create_visitor(request):
-    body = json.loads(request.body)
-    visitor = Visitor(
-                        first_name = body["first_name"],
-                        last_name = body["last_name"],
-                        mobile_num = body["mobile_number"], )
-    visitor.save()
-    for username in body["visiting_to"]:
-        student = StudentProfile.objects.get(owner__username = username)
-        visitor.visiting_to.add(student)
-    
-    
-    return HttpResponse("Visitor saved successfully")
-    
-@api_view(['POST'])
-def set_out_time(request):
     try:
         body = json.loads(request.body)
-        id = body["id"]
-        visitor = Visitor.objects.get(pk=id)
-        visitor.out_time = body["time"]
+        print("cam")
+        student = StudentProfile.objects.get(owner__username = body["visiting_to"])
+        visitor = Visitor(
+                            name = body["name"],
+                            mobile_num = body["mobile_number"],
+                            purpose_of_visiting = body["purpose_of_visiting"],
+                            number_of_visitors = body["number_of_visitors"],
+                            visiting_to = student )
         visitor.save()
+        return HttpResponse("Visitor saved successfully")
+    except StudentProfile.DoesNotExist:
+        return HttpResponseBadRequest("Invalid student id")
+
     except :
-        return HttpResponseBadRequest("No visitor with this id")
+        return HttpResponseBadRequest("Error occured")
+    
+@api_view(['GET'])
+def get_visitors_by_date(request,search_date):
+    try:
+        visitors = Visitor.objects.filter(date = search_date)
+        all_visitor = []
+        for visitor in visitors:
+            all_visitor.append(visitor.serialize())
+        return JsonResponse({"visitors" : all_visitor})
+    except :
+        return HttpResponseBadRequest("Error occured")
 
     
-    
+@api_view(['GET'])
+def get_visitors_by_student_id(request,student_id):
+    try:
+        print(student_id)
+        visitors = Visitor.objects.filter(visiting_to__owner__username = student_id)
+        print(visitors)
+        all_visitor = []
+        for visitor in visitors:
+            all_visitor.append(visitor.serialize())
+        return JsonResponse({"visitors" : all_visitor})
+    except :
+        return HttpResponseBadRequest("Error occured")
 
 

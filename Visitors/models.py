@@ -8,17 +8,30 @@ from students.models import StudentProfile
 
 class Visitor(models.Model):
     id = models.UUIDField(default=uuid.uuid4,primary_key=True,unique=True,editable=False)
-    first_name = models.CharField(max_length=200)
-    last_name = models.CharField(max_length=200,null=True)
-    date = models.DateField(auto_now_add=True)
-    visiting_to = models.ManyToManyField(StudentProfile)
+    name = models.CharField(max_length=200)
+    date = models.DateField(auto_now_add=True,editable=False)
+    visiting_to = models.ForeignKey(StudentProfile ,on_delete=models.CASCADE, null=True , blank=True)
     mobile_num = models.BigIntegerField()
     in_time = models.TimeField(auto_now_add=True,editable=False)
-    out_time = models.TimeField(null=True)
+    purpose_of_visiting = models.TextField(default="Not metioned")
+    number_of_visitors = models.IntegerField(default=1)
 
 
     def __str__(self) -> str:
-        return self.first_name
+        return self.name + " "+ str(self.date)
+    
+    def serialize(self):
+        name = self.visiting_to.name
+        return {
+            "id" : self.id,
+            "name" : self.name,
+            "date" : self.date,
+            "visiting_to" : name,
+            "mobile_number" : self.mobile_num,
+            "in_time" : self.in_time,
+            "purpose_of_visiting" : self.purpose_of_visiting,
+            "number_of_visitors" : self.number_of_visitors
+        }
 
 
 
